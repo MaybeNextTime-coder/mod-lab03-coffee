@@ -113,4 +113,3 @@ void Automata::finish() {
     selected_item_ = -1;
     state_ = STATES::WAIT;
 }
-
