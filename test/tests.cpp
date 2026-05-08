@@ -1,116 +1,207 @@
 // Copyright 2026
-
 #include "Automata.h"
+#include <gtest/gtest.h>
 
-#include <iomanip>
-#include <sstream>
-#include <string>
+TEST(AutomataTest, on_off) {
+    Automata a;
 
-Automata::Automata()
-    : cash_(0.0),
-      menu_({"Tea", "Coffee", "Milk", "Hot chocolate"}),
-      prices_({15.0, 25.0, 20.0, 30.0}),
-      state_(STATES::OFF),
-      selected_item_(-1) {
+    EXPECT_EQ(a.getState(), STATES::OFF);
+
+    a.on();
+
+    EXPECT_EQ(a.getState(), STATES::WAIT);
+
+    a.off();
+
+    EXPECT_EQ(a.getState(), STATES::OFF);
 }
 
-void Automata::on() {
-    if (state_ == STATES::OFF) {
-        state_ = STATES::WAIT;
-    }
+TEST(AutomataTest, insert_coin) {
+    Automata a;
+
+    a.on();
+
+    a.coin(10.0);
+
+    EXPECT_EQ(a.getCash(), 10.0);
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
+
+    a.coin(20.0);
+
+    EXPECT_EQ(a.getCash(), 30.0);
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
 }
 
-void Automata::off() {
-    if (state_ == STATES::WAIT) {
-        state_ = STATES::OFF;
-    }
+TEST(AutomataTest, successful_purchase) {
+    Automata a;
+
+    a.on();
+
+    a.coin(10.0);
+    a.coin(20.0);
+
+    EXPECT_TRUE(a.choice(2));
+
+    EXPECT_EQ(a.getState(), STATES::CHECK);
+
+    EXPECT_TRUE(a.check());
+
+    a.cook();
+
+    EXPECT_EQ(a.getState(), STATES::COOK);
+
+    a.finish();
+
+    EXPECT_EQ(a.getCash(), 0.0);
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
-void Automata::coin(double amount) {
-    if ((state_ == STATES::WAIT || state_ == STATES::ACCEPT) &&
-        amount > 0.0) {
-        cash_ += amount;
-        state_ = STATES::ACCEPT;
-    }
+TEST(AutomataTest, insufficient_funds) {
+    Automata a;
+
+    a.on();
+
+    a.coin(5.0);
+
+    EXPECT_TRUE(a.choice(4));
+
+    EXPECT_FALSE(a.check());
+
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
 }
 
-std::string Automata::etMenu() const {
-    std::ostringstream out;
-    out << "Menu:\n";
-    for (size_t i = 0; i < menu_.size(); ++i) {
-        out << i + 1 << ". " << menu_[i] << " - "
-            << std::fixed << std::setprecision(2) << prices_[i] << '\n';
-    }
-    return out.str();
+TEST(AutomataTest, cancel_operation) {
+    Automata a;
+
+    a.on();
+
+    a.coin(15.0);
+
+    EXPECT_EQ(a.getCash(), 15.0);
+
+    a.cancel();
+
+    EXPECT_EQ(a.getCash(), 0.0);
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
-STATES Automata::getState() const {
-    return state_;
+TEST(AutomataTest, buy_tea) {
+    Automata a;
+
+    a.on();
+
+    a.coin(20.0);
+
+    EXPECT_TRUE(a.choice(1));
+
+    EXPECT_TRUE(a.check());
+
+    a.cook();
+
+    EXPECT_EQ(a.getState(), STATES::COOK);
+
+    a.finish();
+
+    EXPECT_EQ(a.getState(), STATES::WAIT);
+    EXPECT_EQ(a.getCash(), 0.0);
 }
 
-double Automata::getCash() const {
-    return cash_;
+TEST(AutomataTest, invalid_choice) {
+    Automata a;
+
+    a.on();
+
+    a.coin(50.0);
+
+    EXPECT_FALSE(a.choice(10));
+
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
 }
 
-bool Automata::choice(int item) {
-    if (state_ != STATES::ACCEPT) {
-        return false;
-    }
+TEST(AutomataTest, cook_without_check) {
+    Automata a;
 
-    if (item < 1 || item > static_cast<int>(menu_.size())) {
-        return false;
-    }
+    a.on();
 
-    selected_item_ = item - 1;
-    state_ = STATES::CHECK;
-    return true;
+    a.coin(30.0);
+
+    a.cook();
+
+    EXPECT_NE(a.getState(), STATES::COOK);
 }
 
-bool Automata::check() {
-    if (state_ != STATES::CHECK || selected_item_ == -1) {
-        return false;
-    }
+TEST(AutomataTest, finish_without_cook) {
+    Automata a;
 
-    if (cash_ >= prices_[selected_item_]) {
-        return true;
-    }
+    a.on();
 
-    selected_item_ = -1;
-    state_ = STATES::ACCEPT;
-    return false;
+    a.coin(30.0);
+
+    EXPECT_TRUE(a.choice(2));
+
+    a.finish();
+
+    EXPECT_EQ(a.getState(), STATES::CHECK);
+}
+TEST(AutomataTest, negative_coin) {
+    Automata a;
+
+    a.on();
+
+    a.coin(-10.0);
+
+    EXPECT_EQ(a.getCash(), 0.0);
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
-void Automata::cancel() {
-    if (state_ == STATES::WAIT ||
-        state_ == STATES::ACCEPT ||
-        state_ == STATES::CHECK) {
-        cash_ = 0.0;
-        selected_item_ = -1;
-        state_ = STATES::WAIT;
-    }
+TEST(AutomataTest, zero_coin) {
+    Automata a;
+
+    a.on();
+
+    a.coin(0.0);
+
+    EXPECT_EQ(a.getCash(), 0.0);
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
-void Automata::cook() {
-    if (state_ == STATES::CHECK &&
-        selected_item_ != -1 &&
-        cash_ >= prices_[selected_item_]) {
-        state_ = STATES::COOK;
-    }
+TEST(AutomataTest, choice_without_money) {
+    Automata a;
+
+    a.on();
+
+    EXPECT_FALSE(a.choice(1));
+
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
-void Automata::finish() {
-    if (state_ != STATES::COOK || selected_item_ == -1) {
-        return;
-    }
+TEST(AutomataTest, cancel_after_choice) {
+    Automata a;
 
-    cash_ -= prices_[selected_item_];
+    a.on();
 
-    if (cash_ < 0.0) {
-        cash_ = 0.0;
-    }
+    a.coin(50.0);
 
-    cash_ = 0.0;
-    selected_item_ = -1;
-    state_ = STATES::WAIT;
+    EXPECT_TRUE(a.choice(2));
+
+    EXPECT_EQ(a.getState(), STATES::CHECK);
+
+    a.cancel();
+
+    EXPECT_EQ(a.getCash(), 0.0);
+    EXPECT_EQ(a.getState(), STATES::WAIT);
 }
 
+TEST(AutomataTest, off_from_accept_state) {
+    Automata a;
+
+    a.on();
+
+    a.coin(20.0);
+
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
+
+    a.off();
+
+    EXPECT_EQ(a.getState(), STATES::ACCEPT);
+}
